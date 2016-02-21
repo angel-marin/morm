@@ -8,7 +8,7 @@ class Morm {
 	private $dbpass;
 	private $conexion;
 	private $sesion;
-	private $new;
+	private $newItem;
 	private $sql_text;
 	private $query;
 	private $allRows;
@@ -31,7 +31,9 @@ class Morm {
 	private $into;
 	private $filename;
 	private $queryCharset;
+	private $find;
 
+	//configuration set by static function so you can
 	static public function config($globalVar, $dbparams){
 		$GLOBALS['mormsDbParams']=$dbparams;
 		$GLOBALS[$globalVar] = new Morm();
@@ -46,17 +48,37 @@ class Morm {
 		$this->select=$data;
 		return $this;
 	}
+	// simple select with find - from
 	public function find($data='*'){
-
+		$this->find=$data;
 		return $this;
 	}
+
 	public function distinct(){
 		$this->typeSelect='DISTINCT';
 		return $this;
 	}
+	private function getPrimaryKey($table){
+		$pk = $this->conexion->prepare("SHOW KEYS FROM ".$table." WHERE Key_name = 'PRIMARY'");
+		$pk->execute(array());
+		$pk = $pk->fetch(PDO::FETCH_OBJ);
+		$pk=$pk->Column_name;
+		return $pk;
+	}
 	public function from($data){
-		$this->from=$data;
-		return $this;
+		if(isset($this->find)){
+			$pk = $this->getPrimaryKey($data);
+			if ($pk){
+		   		$this->sql_text = "SELECT * FROM ".$data." WHERE ".$pk." = :data";
+			    $this->query = $this->conexion->prepare($this->sql_text);
+				$this->query->execute(array(':data'=>$this->find));
+				$this->actualRow=$this->query->fetch(PDO::FETCH_OBJ);
+				return $this->actualRow;
+			}
+		}else{
+			$this->from=$data;
+			return $this;
+		}
 	}
 	public function where($data='1',$values=null){
 		$temp=new stdClass();
@@ -143,6 +165,9 @@ class Morm {
    		$this->sql_text= "SELECT ".$this->select." FROM ".$this->from;
 	    $this->query = $this->conexion->query($this->sql_text);
 		$this->allRows=$this->query->fetchAll(PDO::FETCH_OBJ);
+		return $this;
+   }
+   public function getAlls(){
 		return $this->allRows;
    }
    public function getFirst(){
@@ -151,14 +176,69 @@ class Morm {
 	public function getLast(){
 		return $this->allRows[count($this->allRows )-1];
 	}
-/*
-   public function create()
-   {
-		// opt2: new class
-		$new=new MormNewQuery();
 
+	public function newItem($table){
+		$this->newItem=new MormItem();
+		$this->newItem->_mormTableName=$table;
+		return $this->newItem;
+	}
 
-   }
-   */
+	public function save(){
+		$creado=false;
+		$columns='';
+		$values='';
+		$valuesParams=array();
+		$temp=$this->getVars();
+		foreach($temp as $key=>$value){
+			if($key!='_mormTableName'){
+				$columns.=$key.',';
+				$values.='?,';
+				$valuesParams[]=$value;
+			}
+		}
+		if(strlen($columns)>0){
+		   $columns	= substr($columns, 0, -1);
+		   $values	= substr($values, 0, -1);
+		}
+		$sql = $this->conexion->prepare("INSERT INTO ".$temp['_mormTableName']." (".$columns.") VALUES (".$values.")");
+		if ($sql->execute($valuesParams))
+		{
+		  $creado=true:
+		  $this->id=$this->conexion->lastInsertId();
+		}
+		return $creado;
+	}
+}
+class MormItem extends Morm {
+	private $functions = array();
+	private $vars = array();
+	
+	function __set($name,$data)
+	{
+	  if(is_callable($data))
+	    $this->functions[$name] = $data;
+	  else
+	   $this->vars[$name] = $data;
+	}
+	
+	function __get($name)
+	{
+	  if(isset($this->vars[$name]))
+	   return $this->vars[$name];
+	}
+	
+	function getVars(){
+		return $this->vars;
+	}
+	
+	function __call($method,$args)
+	{
+	  if(isset($this->functions[$method]))
+	  {
+	   call_user_func_array($this->functions[$method],$args);
+	  } else {
+	   // error out
+	  }
+	}
 }
 ?>
