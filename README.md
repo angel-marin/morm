@@ -44,7 +44,8 @@ $morm_query->create()                     //set vars for a new query
 ->offset(number)                          //OPTIONAL
 ->procedure('conditions')                 //OPTIONAL (not finished)
 ->into('OUTFILE','filename'','charset')   //OPTIONAL (not tested)
-->execute()                               //get query resutls as object
+->execute()                               //set end for optionals parameters
+->getAlls()                               //get query results as object
 ->getFirst()                              //OPTIONAL: after execute(), return the first row as object
 ->getLast()                               //OPTIONAL: after execute(), return the last row as object
 
@@ -59,7 +60,7 @@ $morm_query->create()                     //set vars for a new query
 Update:
 $morm_query->create()                     //set vars for a new query
 ->update('table_name')                    //set table where you want update rows
-->set('colum = value')                    //set what you want uptdate
+->set('column = value')                    //set what you want uptdate
 ->set('column1,column2[,columnN]', array('value1','value2' [,'valueN']))  //other form to call set()
 ->where('conditions')                     //OPTIONAL
 ->andWhere('conditions')                  //OPTIONAL: You need set where first if you want use and where
@@ -67,3 +68,7 @@ $morm_query->create()                     //set vars for a new query
 ->execute()                               //run query
 
 Insert:
+$reg=$morm_query->newItem('table_name');  //set the creation of a new item inside a table named 'table_name'
+$reg->column='value';                     //set value to a column
+$reg->save();                             //save the new item
+EXTRA: after save() you can get $reg->primary_key_column, this return the autoincremental value of the primary_key 
