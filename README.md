@@ -87,5 +87,5 @@ complete EXAMPLE:
     $reg->column='value';                     //set value to a column
     $reg->save();                             //save the new item
 
-#### EXTRA:
-after `save()` you can get `$reg->primary_key_column`, this return the autoincremental value of the `primary_key`
+    NOTE:
+    after $reg->save() you can get $reg->primary_key_column, this return the autoincremental value of the primary_key
