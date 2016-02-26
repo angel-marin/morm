@@ -77,9 +77,8 @@ class Morm {
 		$this->select = $data;
 		return $this;
 	}
-	// simple select ->find('data')->from('table')
 	public function find($data = '*'){
-		if isset($this->allRows[0]){
+		if isset($this->allRows[0]){ // simple select ->getTable('table')->find('data')
 			$pk = $this->getPrimaryKey($data);
 			foreach ($this->allRows as $row){
 				if($row->$pk == $data)
@@ -89,7 +88,6 @@ class Morm {
 		$this->find = $data;
 		return $this;
 	}
-	// simple select ->getTable('table')->find('data')
 	public function getTable($table){
 		$this->execute($table);
 	}
@@ -105,7 +103,7 @@ class Morm {
 		return $pk;
 	}
 	public function from($data){
-		if(isset($this->find)){
+		if(isset($this->find)){ // simple select ->find('data')->from('table')
 			$pk = $this->getPrimaryKey($data);
 			if ($pk){
 				$this->sql_text = "SELECT * FROM ".$data." WHERE ".$pk." = :data";
@@ -173,23 +171,25 @@ class Morm {
 	public function execute(){
 		switch($this->typeQuery){
 			case 'select':
+				$xwlText = '';
+				if(isset($this->limit))$xwlText .= ' LIMIT' . $this->limit;
 				$this->sql_text = "SELECT ".$this->select." FROM ".$this->from;
 				$this->query = $this->conexion->query($this->sql_text);
 				$this->allRows = $this->query->fetchAll(PDO::FETCH_OBJ);
 				return $this;
 			break;
 			case 'delete':
-				$done=false;
-			  	$sql = $this->conexion->prepare("DELETE FROM ".$this->from."");
+				$done=  false;
+			  	$sql = $this->conexion->prepare("DELETE FROM " . $this->from."");
 				if ($sql->execute(array()))
-					$done=true;
+					$done=  true;
 				return $done;
 			break;
 			case 'update':
-				$done=false;
-			  	$sql = $this->conexion->prepare("UPDATE FROM ".$this->from."");
+				$done = false;
+			  	$sql = $this->conexion->prepare("UPDATE FROM " . $this->from."");
 				if ($sql->execute(array()))
-					$done=true;
+					$done = true;
 				return $done;
 			break;
 		}
@@ -200,8 +200,30 @@ class Morm {
 	public function getFirst(){
 		return $this->allRows[0];
 	}
+	public functiom getFirsts($val){
+		$temp = array();
+		if($this->allRows > 0){
+			for ($i = 0;$i < $val;$i++){
+				if(isset($this->allRows[$I]))
+					$temp[] = $this->allRows[$I];
+			}
+		}
+		return $temp;
+	}
 	public function getLast(){
 		return $this->allRows[count($this->allRows )-1];
+	}
+	public functiom getLasts($val){
+		$temp = array();
+		if($this->allRows > 0){
+			$allCount = count($this->allRows);
+			$i = ($allCount - $val > 0)?$allCount - $val:0:
+			for ($i;$i < $allCount;$i++){
+				if(isset($this->allRows[$I]))
+					$temp[] = $this->allRows[$I];
+			}
+		}
+		return $temp;
 	}
 	public function newItem($table){
 		$this->newItem = new MormItem();
@@ -234,11 +256,19 @@ class Morm {
 		return $done;
 	}
 	public function delete($table){
+		if(!isset($this->select)){ //with this we can set create as optional
+			$this->andWhere = [];
+			$this->orWhere = [];
+		}
 		$this->from = $data;
 		$this->typeQuery = 'delete';
 		return $this;
 	}
 	public function update($table){
+		if(!isset($this->select)){ //with this we can set create as optional
+			$this->andWhere = [];
+			$this->orWhere = [];
+		}
 		$this->from = $data;
 		$this->typeQuery = 'update';
 		return $this;
