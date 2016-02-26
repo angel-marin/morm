@@ -44,11 +44,11 @@ complete EXAMPLE:
 #### Select:
 
     $morm_query->create()                       // set vars for a new query
-      ->select('column_name')                   //OPTIONAL: by default setted at '*'
+      ->select('column_name[, column_nameN]')                   //OPTIONAL: by default setted at '*'
       ->from('table_name')                      // table of the database
       ->where('conditions')                     //OPTIONAL
-      ->andWhere('conditions')                  //OPTIONAL: You need set where first if you want use and where
-      ->orWhere('conditions')                   //OPTIONAL: You need set where first if you want use or where 
+      ->andWhere('conditions')                  //OPTIONAL: You need set where first if you want use and where. You can set this method several times
+      ->orWhere('conditions')                   //OPTIONAL: You need set where first if you want use or where. You can set this method several times 
       ->groupBy('colum_name')                   //OPTIONAL
       ->having('conditions')                    //OPTIONAL
       ->orderBy('column_name ASC')              //OPTIONAL
@@ -60,19 +60,30 @@ complete EXAMPLE:
       ->getAlls()                               //get query results as object
       ->getFirst()                              //OPTIONAL: after execute(), return the first row as object
       ->getLast()                               //OPTIONAL: after execute(), return the last row as object
+    
+    NOTE:
+    You can use $morm_query->create() with optinal ->select('column_name') or you can use $morm_query->select('column_name') without create()
+    
+#### Altenative Select methods
+
+    $reg = $morm_query->find('id')->from('table');      // search 'id' in 'table' by primary key
+    $reg = $morm_query->getTable('table')->find('id');  // search 'id' in 'table' by primary key (slower than previous method)
 
 #### Delete:
 
-    $morm_query->create()                       //set vars for a new query
+    $morm_query->create()                       //OPTIONAL: set vars for a new query (just because Doctrine nostalgia)
       ->delete('table_name')                    //set table where you want delete rows
       ->where('conditions')                     //OPTIONAL
       ->andWhere('conditions')                  //OPTIONAL: You need set where first if you want use and where
       ->orWhere('conditions')                   //OPTIONAL: You need set where first if you want use or where 
       ->execute()                               //run query
+      
+    NOTE:
+    You can use $morm_query->create() with optinal ->delete('table_name') or you can use $morm_query->delete('table_name') without create()
 
 #### Update:
 
-    $morm_query->create()                       //set vars for a new query
+    $morm_query->create()                       //OPTIONAL: set vars for a new query (just because Doctrine nostalgia)
       ->update('table_name')                    //set table where you want update rows
       ->set('column = value')                   //set what you want uptdate
       ->set('column1,column2[,columnN]', array('value1','value2' [,'valueN']))  //other form to call set()
@@ -80,6 +91,9 @@ complete EXAMPLE:
       ->andWhere('conditions')                  //OPTIONAL: You need set where first if you want use and where
       ->orWhere('conditions')                   //OPTIONAL: You need set where first if you want use or where 
       ->execute()                               //run query
+      
+    NOTE:
+    You can use $morm_query->create() with optinal ->update('table_name') or you can use $morm_query->update('table_name') without create()
 
 #### Insert:
 
