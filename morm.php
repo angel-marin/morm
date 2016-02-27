@@ -10,10 +10,11 @@ class Morm {
 	private $sesion;
 	private $newItem;
 	private $sql_text;
+	private $pk;
 	private $query;
 	private $allRows;
 	private $actualRow;
-	
+
 	private $select;
 	private $typeSelect;
 	private $typeQuery;
@@ -31,7 +32,11 @@ class Morm {
 	private $filename;
 	private $queryCharset;
 	private $find;
-	
+
+	private $joinTable;
+	private $fkColumnInner;
+	private $fkColumn;
+
 	public function __construct() {
 		$this->construct();
 	}
@@ -63,15 +68,45 @@ class Morm {
 		}
 	}
 	public function create(){
+		$this->unsetAll();
 		$this->select = '*';
-		$this->andWhere = [];
-		$this->orWhere = [];
+		$this->andWhere = array();
+		$this->orWhere = array();
+		$this->joinTable = array();
+		$this->fkColumnInner = array();
+		$this->fkColumn = array();
 		return $this;
+	}
+	private function unsetAll(){
+		unset($this->sql_text);
+		unset($this->pk);
+		unset($this->query);
+		unset($this->allRows);
+		unset($this->actualRow);
+		unset($this->select);
+		unset($this->typeSelect);
+		unset($this->typeQuery);
+		unset($this->from);
+		unset($this->where);
+		unset($this->andWhere);
+		unset($this->orWhere);
+		unset($this->groupBy);
+		unset($this->having);
+		unset($this->orderBy);
+		unset($this->limit);
+		unset($this->offset);
+		unset($this->procedure);
+		unset($this->into);
+		unset($this->filename);
+		unset($this->queryCharset);
+		unset($this->find);
+		unset($this->joinTable);
+		unset($this->fkColumnInner);
+		unset($this->fkColumn);
 	}
 	public function select($data = '*'){
 		if(!isset($this->select)){ //with this we can set create as optional
-			$this->andWhere = [];
-			$this->orWhere = [];
+			$this->create();
 		}
 		$this->typeQuery = 'select';
 		$this->select = $data;
@@ -79,7 +114,8 @@ class Morm {
 	}
 	public function find($data = '*'){
 		if isset($this->allRows[0]){ // simple select ->getTable('table')->find('data')
-			$pk = $this->getPrimaryKey($data);
+			$this->getPrimaryKey();
+			$pk = $this->pk;
 			foreach ($this->allRows as $row){
 				if($row->$pk == $data)
 					return $row;
@@ -89,22 +125,63 @@ class Morm {
 		return $this;
 	}
 	public function getTable($table){
-		$this->execute($table);
+		$this->select();
+		$this->from($table);
+		$this->execute();
 	}
 	public function distinct(){
 		$this->typeSelect = 'DISTINCT';
 		return $this;
 	}
-	private function getPrimaryKey($table){
-		$pk = $this->conexion->prepare("SHOW KEYS FROM ".$table." WHERE Key_name = 'PRIMARY'");
+	public function join($table){
+		$join = new stdClass();
+		$join->type='LEFT';
+		$join->table = $table;
+		$this->joinTable[] = $join;
+		$this->getForeignKey();
+	}
+	public function leftJoin($table){
+		$join = new stdClass();
+		$join->type='LEFT';
+		$join->table = $table;
+		$this->joinTable[] = $join;
+		$this->getForeignKey();
+	}
+	public function rightJoin($table){
+		$join = new stdClass();
+		$join->type='RIGHT';
+		$join->table = $table;
+		$this->joinTable[] = $join;
+		$this->getForeignKey();
+	}
+	public function innerJoin($table){
+		$join = new stdClass();
+		$join->type='LEFT';
+		$join->table = $table;
+		$this->joinTable[] = $join;
+		$this->getForeignKey();
+	}
+	private function getPrimaryKey(){
+		$pk = $this->conexion->prepare("SHOW KEYS FROM " . $this->from . " WHERE Key_name = 'PRIMARY'");
 		$pk->execute(array());
 		$pk = $pk->fetch(PDO::FETCH_OBJ);
 		$pk = $pk->Column_name;
-		return $pk;
+		$this->pk = $pk;
+	}
+	private function getForeignKey(){
+		$jTable = $this->joinTable[count($this->joinTable) - 1];
+		$jTable = $jTable->table;
+		$fk = $this->conexion->prepare("SELECT column_name, referenced_column_name FROM information_schema.key_column_usage WHERE referenced_table_name IS NOT NULL AND table_name = '" . $this->from . "' AND referenced_table_name = '" . $jTable . "' AND table_schema = '" . $this->dbname . "'");
+		$fk->execute(array());
+		$fk = $fk->fetch(PDO::FETCH_OBJ);
+		$this->fkColumnInner[] = $fk->Column_name;
+		$this->fkColumn[] = $fk->referenced_column_name;
 	}
 	public function from($data){
+		$this->from = $data;
 		if(isset($this->find)){ // simple select ->find('data')->from('table')
-			$pk = $this->getPrimaryKey($data);
+			$this->getPrimaryKey();
+			$pk = $this->pk;
 			if ($pk){
 				$this->sql_text = "SELECT * FROM ".$data." WHERE ".$pk." = :data";
 				$this->query = $this->conexion->prepare($this->sql_text);
@@ -113,7 +190,6 @@ class Morm {
 				return $this->actualRow;
 			}
 		}else{
-			$this->from = $data;
 			return $this;
 		}
 	}
@@ -171,9 +247,36 @@ class Morm {
 	public function execute(){
 		switch($this->typeQuery){
 			case 'select':
-				$xwlText = '';
-				if(isset($this->limit))$xwlText .= ' LIMIT' . $this->limit;
-				$this->sql_text = "SELECT ".$this->select." FROM ".$this->from;
+				$sqlText = 'SELECT '.$this->select;
+				if(isset($this->typeSelect)) $sqlText .= ' ' . $this->typeSelect;
+				$sqlText = ' FROM '.$this->from;
+				if(isset($this->joinTable)){
+					foreach($this->joinTable as $key => $j){
+						$sqlText .= ' ' . $j->type . ' JOIN ' . $j->table . ' ON ' . $this->from . '.' . $this->fkColumnInner[$key] . '=' . $j->table . '.' . $this->fkColumn[$key];
+					}
+				}
+				if(isset($this->where)){
+					$sqlText .= ' WHERE ' . $this->where;
+					if(isset($this->andWhere)){
+						foreach($this->andWhere as $w){
+							$sqlText .= ' AND (WHERE ' . $w . ')';
+						}
+					}
+					if(isset($this->orWhere)){
+						foreach($this->orWhere as $w){
+							$sqlText .= ' OR (WHERE ' . $w . ')';
+						}
+					}
+				}
+				if(isset($this->groupBy)) $sqlText .= ' GROUP BY ' . $this->groupBy;
+				if(isset($this->having)) $sqlText .= ' HAVING ' . $this->having;
+				if(isset($this->orderBy)) $sqlText .= ' ORDER BY ' . $this->orderBy;
+				if(isset($this->limit)) $sqlText .= ' LIMIT ' . $this->limit;
+				if(isset($this->offset)) $sqlText .= ' OFFSET ' . $this->offset;
+				if(isset($this->procedure)) $sqlText .= ' PROCEDURE ' . $this->procedure;
+				if(isset($this->into)) $sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
+				if(isset($this->queryCharset)) $sqlText .= ' CHARACTER SET ' . $this->queryCharset;
+				$this->sql_text = $sqlText;
 				$this->query = $this->conexion->query($this->sql_text);
 				$this->allRows = $this->query->fetchAll(PDO::FETCH_OBJ);
 				return $this;
@@ -204,14 +307,14 @@ class Morm {
 		$temp = array();
 		if($this->allRows > 0){
 			for ($i = 0;$i < $val;$i++){
-				if(isset($this->allRows[$I]))
-					$temp[] = $this->allRows[$I];
+				if(isset($this->allRows[$i]))
+					$temp[] = $this->allRows[$i];
 			}
 		}
 		return $temp;
 	}
 	public function getLast(){
-		return $this->allRows[count($this->allRows )-1];
+		return $this->allRows[count($this->allRows) - 1];
 	}
 	public functiom getLasts($val){
 		$temp = array();
@@ -219,8 +322,8 @@ class Morm {
 			$allCount = count($this->allRows);
 			$i = ($allCount - $val > 0)?$allCount - $val:0:
 			for ($i;$i < $allCount;$i++){
-				if(isset($this->allRows[$I]))
-					$temp[] = $this->allRows[$I];
+				if(isset($this->allRows[$i]))
+					$temp[] = $this->allRows[$i];
 			}
 		}
 		return $temp;
@@ -257,8 +360,7 @@ class Morm {
 	}
 	public function delete($table){
 		if(!isset($this->select)){ //with this we can set create as optional
-			$this->andWhere = [];
-			$this->orWhere = [];
+			$this->create();
 		}
 		$this->from = $data;
 		$this->typeQuery = 'delete';
@@ -266,8 +368,7 @@ class Morm {
 	}
 	public function update($table){
 		if(!isset($this->select)){ //with this we can set create as optional
-			$this->andWhere = [];
-			$this->orWhere = [];
+			$this->create();
 		}
 		$this->from = $data;
 		$this->typeQuery = 'update';
@@ -277,7 +378,7 @@ class Morm {
 class MormItem extends Morm {
 	private $functions = array();
 	private $vars = array();
-	
+
 	function __set($name,$data){
 		if(is_callable($data))
 			$this->functions[$name] = $data;
