@@ -9,7 +9,8 @@ class Morm {
 	private $conexion;
 	private $sesion;
 	private $newItem;
-	private $sql_text;
+	private $sqlText;
+	private $sqlValues;
 	private $pk;
 	private $query;
 	private $allRows;
@@ -32,6 +33,8 @@ class Morm {
 	private $filename;
 	private $queryCharset;
 	private $find;
+
+	private $set;
 
 	private $joinTable;
 	private $fkColumnInner;
@@ -75,10 +78,12 @@ class Morm {
 		$this->joinTable = array();
 		$this->fkColumnInner = array();
 		$this->fkColumn = array();
+		$this->set = array();
+		$this->typeQuery = 'select';
 		return $this;
 	}
 	private function unsetAll(){
-		unset($this->sql_text);
+		unset($this->sqlText);
 		unset($this->pk);
 		unset($this->query);
 		unset($this->allRows);
@@ -103,17 +108,16 @@ class Morm {
 		unset($this->joinTable);
 		unset($this->fkColumnInner);
 		unset($this->fkColumn);
+		unset($this->set);
 	}
 	public function select($data = '*'){
-		if(!isset($this->select)){ //with this we can set create as optional
-			$this->create();
-		}
+		$this->create();
 		$this->typeQuery = 'select';
 		$this->select = $data;
 		return $this;
 	}
 	public function find($data = '*'){
-		if isset($this->allRows[0]){ // simple select ->getTable('table')->find('data')
+		if (isset($this->allRows[0])){ // simple select ->getTable('table')->find('data')
 			$this->getPrimaryKey();
 			$pk = $this->pk;
 			foreach ($this->allRows as $row){
@@ -183,8 +187,8 @@ class Morm {
 			$this->getPrimaryKey();
 			$pk = $this->pk;
 			if ($pk){
-				$this->sql_text = "SELECT * FROM ".$data." WHERE ".$pk." = :data";
-				$this->query = $this->conexion->prepare($this->sql_text);
+				$this->sqlText = "SELECT * FROM ".$data." WHERE ".$pk." = :data";
+				$this->query = $this->conexion->prepare($this->sqlText);
 				$this->query->execute(array(':data' => $this->find));
 				$this->actualRow = $this->query->fetch(PDO::FETCH_OBJ);
 				return $this->actualRow;
@@ -194,6 +198,8 @@ class Morm {
 		}
 	}
 	public function where($data = '1', $values = null){
+		if((array)$values !== $values)
+			$values = array($values);
 		$temp = new stdClass();
 		$temp->sentence = $data;
 		$temp->values = $values;
@@ -201,6 +207,8 @@ class Morm {
 		return $this;
 	}
 	public function andWhere($data = '1', $values = null){
+		if((array)$values !== $values)
+			$values = array($values);
 		$temp = new stdClass();
 		$temp->sentence = $data;
 		$temp->values = $values;
@@ -208,6 +216,8 @@ class Morm {
 		return $this;
 	}
 	public function orWhere($data = '1', $values = null){
+		if((array)$values !== $values)
+			$values = array($values);
 		$temp = new stdClass();
 		$temp->sentence = $data;
 		$temp->values = $values;
@@ -244,54 +254,80 @@ class Morm {
 		$this->queryCharset = $charset;
 		return $this;
 	}
+	private function parseWhere(){
+		if(isset($this->where)){
+			$this->sqlText .= ' WHERE ' . $this->where->sentence;
+			$this->sqlValues = array_merge($this->sqlValues, $this->where->values);
+			if(isset($this->andWhere)){
+				foreach($this->andWhere as $w){
+					$this->sqlText .= ' AND (' . $w->sentence . ')';
+					$this->sqlValues = array_merge($this->sqlValues, $w->values);
+				}
+			}
+			if(isset($this->orWhere)){
+				foreach($this->orWhere as $w){
+					$this->sqlText .= ' OR (' . $w . ')';
+					$this->sqlValues = array_merge($this->sqlValues, $w->values);
+				}
+			}
+		}
+	}
 	public function execute(){
 		switch($this->typeQuery){
 			case 'select':
-				$sqlText = 'SELECT '.$this->select;
-				if(isset($this->typeSelect)) $sqlText .= ' ' . $this->typeSelect;
-				$sqlText = ' FROM '.$this->from;
+				$this->sqlText = 'SELECT '.$this->select;
+				if(isset($this->typeSelect)) $this->sqlText .= ' ' . $this->typeSelect;
+				$this->sqlText .= ' FROM '.$this->from;
 				if(isset($this->joinTable)){
 					foreach($this->joinTable as $key => $j){
-						$sqlText .= ' ' . $j->type . ' JOIN ' . $j->table . ' ON ' . $this->from . '.' . $this->fkColumnInner[$key] . '=' . $j->table . '.' . $this->fkColumn[$key];
+						$this->sqlText .= ' ' . $j->type . ' JOIN ' . $j->table . ' ON ' . $this->from . '.' . $this->fkColumnInner[$key] . '=' . $j->table . '.' . $this->fkColumn[$key];
 					}
 				}
-				if(isset($this->where)){
-					$sqlText .= ' WHERE ' . $this->where;
-					if(isset($this->andWhere)){
-						foreach($this->andWhere as $w){
-							$sqlText .= ' AND (WHERE ' . $w . ')';
-						}
-					}
-					if(isset($this->orWhere)){
-						foreach($this->orWhere as $w){
-							$sqlText .= ' OR (WHERE ' . $w . ')';
-						}
-					}
-				}
-				if(isset($this->groupBy)) $sqlText .= ' GROUP BY ' . $this->groupBy;
-				if(isset($this->having)) $sqlText .= ' HAVING ' . $this->having;
-				if(isset($this->orderBy)) $sqlText .= ' ORDER BY ' . $this->orderBy;
-				if(isset($this->limit)) $sqlText .= ' LIMIT ' . $this->limit;
-				if(isset($this->offset)) $sqlText .= ' OFFSET ' . $this->offset;
-				if(isset($this->procedure)) $sqlText .= ' PROCEDURE ' . $this->procedure;
-				if(isset($this->into)) $sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
+				$this->parseWhere();
+				if(isset($this->groupBy)) $this->sqlText .= ' GROUP BY ' . $this->groupBy;
+				if(isset($this->having)) $this->sqlText .= ' HAVING ' . $this->having;
+				if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
+				if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
+				if(isset($this->offset)) $this->sqlText .= ' OFFSET ' . $this->offset;
+				if(isset($this->procedure)) $this->sqlText .= ' PROCEDURE ' . $this->procedure;
+				if(isset($this->into)) $this->sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
 				if(isset($this->queryCharset)) $sqlText .= ' CHARACTER SET ' . $this->queryCharset;
-				$this->sql_text = $sqlText;
-				$this->query = $this->conexion->query($this->sql_text);
-				$this->allRows = $this->query->fetchAll(PDO::FETCH_OBJ);
+				$this->query = $this->conexion->prepare($this->sqlText);
+				var_dump($this->sqlText);
+        		var_dump ($this->sqlValues);
+				$this->query->execute($this->sqlValues);
+				if($this->query)
+					$this->allRows = $this->query->fetchAll(PDO::FETCH_OBJ);
+				else
+					$this->allRows = array(); // empty array for no errors
 				return $this;
 			break;
 			case 'delete':
-				$done=  false;
-			  	$sql = $this->conexion->prepare("DELETE FROM " . $this->from."");
-				if ($sql->execute(array()))
+				$done = false;
+			  	$this->sqlText = 'DELETE FROM ' . $this->from;
+				$this->parseWhere();
+				if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
+				if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
+			  	$sql = $this->conexion->prepare($this->sqlText);
+				if ($sql->execute($this->sqlValues))
 					$done=  true;
 				return $done;
 			break;
 			case 'update':
 				$done = false;
-			  	$sql = $this->conexion->prepare("UPDATE FROM " . $this->from."");
-				if ($sql->execute(array()))
+				$this->sqlText = 'UPDATE ' . $this->from;
+				if(isset($this->set)){
+					$this->sqlText .= ' SET ';
+					foreach($this->set as $key => $j){
+						$this->sqlText .= ' ' . $j->sentence . ', ';
+						$this->sqlValues = array_merge($this->sqlValues, $w->values);
+					}
+				}
+				$this->parseWhere();
+				if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
+				if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
+			  	$sql = $this->conexion->prepare($this->sqlText);
+				if ($sql->execute($this->sqlValues))
 					$done = true;
 				return $done;
 			break;
@@ -303,7 +339,7 @@ class Morm {
 	public function getFirst(){
 		return $this->allRows[0];
 	}
-	public functiom getFirsts($val){
+	public function getFirsts($val){
 		$temp = array();
 		if($this->allRows > 0){
 			for ($i = 0;$i < $val;$i++){
@@ -316,17 +352,20 @@ class Morm {
 	public function getLast(){
 		return $this->allRows[count($this->allRows) - 1];
 	}
-	public functiom getLasts($val){
+	public function getLasts($val){
 		$temp = array();
 		if($this->allRows > 0){
 			$allCount = count($this->allRows);
-			$i = ($allCount - $val > 0)?$allCount - $val:0:
+			$i = ($allCount - $val > 0)?$allCount - $val:0;
 			for ($i;$i < $allCount;$i++){
 				if(isset($this->allRows[$i]))
 					$temp[] = $this->allRows[$i];
 			}
 		}
 		return $temp;
+	}
+	public function getQuery(){
+		return $this->sqlText;
 	}
 	public function newItem($table){
 		$this->newItem = new MormItem();
@@ -353,25 +392,30 @@ class Morm {
 		$sql = $this->conexion->prepare("INSERT INTO ".$temp['_mormTableName']." (".$columns.") VALUES (".$values.")");
 		if ($sql->execute($valuesParams))
 		{
-		  $done = true:
+		  $done = true;
 		  $this->id = $this->conexion->lastInsertId();
 		}
 		return $done;
 	}
 	public function delete($table){
-		if(!isset($this->select)){ //with this we can set create as optional
-			$this->create();
-		}
-		$this->from = $data;
+		$this->create();
+		$this->from = $table;
 		$this->typeQuery = 'delete';
 		return $this;
 	}
 	public function update($table){
-		if(!isset($this->select)){ //with this we can set create as optional
-			$this->create();
-		}
-		$this->from = $data;
+		$this->create();
+		$this->from = $table;
 		$this->typeQuery = 'update';
+		return $this;
+	}
+	public function set($data, $values = null){
+		if((array)$values !== $values)
+			$values = array($values);
+		$temp = new stdClass();
+		$temp->sentence = $data;
+		$temp->values = $values;
+		$this->set[] = $temp;
 		return $this;
 	}
 }
