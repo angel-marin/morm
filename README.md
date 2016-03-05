@@ -4,8 +4,7 @@ morm
 ### Micro ORM
 
 I usually make web projects with Doctrine.
-I like the sintax, but with small projects I don't need all the extra posibilities of Doctrine
-So I decide create a Micro ORM so I can use a similar sintax but simpler.
+I like the sintax, but with small projects I don't need all the extra posibilities of Doctrine, so I decide create a Micro ORM which I can use a similar sintax but simpler.
 
 ### INSTALATION
 
@@ -56,13 +55,19 @@ complete EXAMPLE:
       ->offset(number)                          //OPTIONAL
       ->procedure('conditions')                 //OPTIONAL (not finished)
       ->into('OUTFILE','filename'','charset')   //OPTIONAL (not tested)
-      ->execute()                               //set end for optionals parameters
-      ->getAlls()                               //get query results as object
+      ->execute()                               //set end for optionals methods
+      ->getAlls();                              //OPTIONAL: after execute(), return query results as object
       ->getFirst()                              //OPTIONAL: after execute(), return the first row as object
-      ->getLast()                               //OPTIONAL: after execute(), return the last row as object
+      ->getLast();                              //OPTIONAL: after execute(), return the last row as object
+      ->getFirsts(number)                       //OPTIONAL: after execute(), return the firsts (number) rows as object
+      ->getLasts(number);                       //OPTIONAL: after execute(), return the lasts (number) rows as object
     
     NOTE:
     You can use $morm_query->create() with optinal ->select('column_name') or you can use $morm_query->select('column_name') without create()
+    You can use parameters in where, andWhere and orWhere methods. Example:
+      ->where('column = ?', 5)
+      ->andWhere('column like ?', '%text%')
+      ->orWhere('column > ? AND column < ?', array(5, 10))
     
 #### Altenative Select methods
 
@@ -76,24 +81,36 @@ complete EXAMPLE:
       ->where('conditions')                     //OPTIONAL
       ->andWhere('conditions')                  //OPTIONAL: You need set where first if you want use and where
       ->orWhere('conditions')                   //OPTIONAL: You need set where first if you want use or where 
-      ->execute()                               //run query
+      ->orderBy('column_name ASC')              //OPTIONAL
+      ->limit(number)                           //OPTIONAL: if only call ->limit() set limit to 1
+      ->execute();                              //run query
       
     NOTE:
     You can use $morm_query->create() with optinal ->delete('table_name') or you can use $morm_query->delete('table_name') without create()
+    You can use where, andWhere and orWhere with parameters also, just see note in Select sintax
 
 #### Update:
 
     $morm_query->create()                       //OPTIONAL: set vars for a new query (just because Doctrine nostalgia)
       ->update('table_name')                    //set table where you want update rows
       ->set('column = value')                   //set what you want uptdate
-      ->set('column1,column2[,columnN]', array('value1','value2' [,'valueN']))  //other form to call set()
       ->where('conditions')                     //OPTIONAL
       ->andWhere('conditions')                  //OPTIONAL: You need set where first if you want use and where
       ->orWhere('conditions')                   //OPTIONAL: You need set where first if you want use or where 
-      ->execute()                               //run query
+      ->orderBy('column_name ASC')              //OPTIONAL
+      ->limit(number)                           //OPTIONAL: if only call ->limit() set limit to 1
+      ->execute();                              //run query
       
     NOTE:
     You can use $morm_query->create() with optinal ->update('table_name') or you can use $morm_query->update('table_name') without create()
+    You can use where, andWhere and orWhere with parameters also, just see note in Select sintax
+    You can use parameters in set method like with where and you can call ->set lots of times or you can set all values in one call:
+    $morm_query->create()
+      ->update('table_name')
+      ->set('column = value')
+      ->set('column2 = ?', value)
+      ->set('column3 = ?, column4 = ?', array(value1, value2))
+      ->execute();
 
 #### Insert:
 
