@@ -293,8 +293,6 @@ class Morm {
 				if(isset($this->into)) $this->sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
 				if(isset($this->queryCharset)) $sqlText .= ' CHARACTER SET ' . $this->queryCharset;
 				$this->query = $this->conexion->prepare($this->sqlText);
-				var_dump($this->sqlText);
-        		var_dump ($this->sqlValues);
 				$this->query->execute($this->sqlValues);
 				if($this->query)
 					$this->allRows = $this->query->fetchAll(PDO::FETCH_OBJ);
