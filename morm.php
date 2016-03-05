@@ -291,7 +291,7 @@ class Morm {
 				if(isset($this->offset)) $this->sqlText .= ' OFFSET ' . $this->offset;
 				if(isset($this->procedure)) $this->sqlText .= ' PROCEDURE ' . $this->procedure;
 				if(isset($this->into)) $this->sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
-				if(isset($this->queryCharset)) $sqlText .= ' CHARACTER SET ' . $this->queryCharset;
+				if(isset($this->queryCharset)) $this->sqlText .= ' CHARACTER SET ' . $this->queryCharset;
 				$this->query = $this->conexion->prepare($this->sqlText);
 				$this->query->execute($this->sqlValues);
 				if($this->query)
@@ -306,9 +306,9 @@ class Morm {
 				$this->parseWhere();
 				if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
 				if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
-			  	$sql = $this->conexion->prepare($this->sqlText);
-				if ($sql->execute($this->sqlValues))
-					$done=  true;
+			  	$this->query = $this->conexion->prepare($this->sqlText);
+				if ($this->query->execute($this->sqlValues))
+					$done = true;
 				return $done;
 			break;
 			case 'update':
@@ -324,8 +324,8 @@ class Morm {
 				$this->parseWhere();
 				if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
 				if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
-			  	$sql = $this->conexion->prepare($this->sqlText);
-				if ($sql->execute($this->sqlValues))
+			  	$this->query = $this->conexion->prepare($this->sqlText);
+				if ($this->query->execute($this->sqlValues))
 					$done = true;
 				return $done;
 			break;
