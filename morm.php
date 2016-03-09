@@ -7,6 +7,7 @@ class Morm {
 	private $dbuser;
 	private $dbpass;
 	private $conexion;
+	private $safeJoin;
 	private $sesion;
 	private $newItem;
 	private $sqlText;
@@ -15,6 +16,7 @@ class Morm {
 	private $query;
 	private $allRows;
 	private $actualRow;
+	private $columNames;
 
 	private $select;
 	private $typeSelect;
@@ -37,6 +39,7 @@ class Morm {
 	private $set;
 
 	private $joinTable;
+	private $joinJoin;
 	private $fkColumnInner;
 	private $fkColumn;
 
@@ -48,10 +51,10 @@ class Morm {
 		$this->driver = (isset($mormsDbParams['driver']))?$mormsDbParams['driver']:'mysql';
 		$this->host = (isset($mormsDbParams['host']))?$mormsDbParams['host']:'localhost';
 		$this->charset = (isset($mormsDbParams['charset']))?$mormsDbParams['charset']:'UTF8';
+		$this->safeJoin = (isset($mormsDbParams['safeJoin']))?$mormsDbParams['safeJoin']:true;
 		if(isset($mormsDbParams['dbname'])) $this->dbname = $mormsDbParams['dbname'];
 		if(isset($mormsDbParams['user'])) $this->dbuser = $mormsDbParams['user'];
 		if(isset($mormsDbParams['password'])) $this->dbpass=$mormsDbParams['password'];
-		if(isset($mormsDbParams['driver'])) $this->driver=$mormsDbParams['driver'];
 		if(!isset($mormsDbParams['connect']) || $mormsDbParams['connect'] == 'true') $this->conectar();
 	}
 	//configuration set by static function so you can
@@ -67,22 +70,27 @@ class Morm {
 			$this->conexion = new PDO($this->driver.":host=".$this->host.";dbname=".$this->dbname.";charset=".$this->charset, $this->dbuser, $this->dbpass);
 		}
 		catch (PDOException $e) {
-			echo "Error de conexion en la base de datos, por favor, intentelo mas tarde";
+			return array('Error' => $e->getMessage());
 		}
 	}
 	public function create(){
 		$this->unsetAll();
+		$this->columNames = array();
 		$this->select = '*';
+		$this->sqlValues = array();
 		$this->andWhere = array();
 		$this->orWhere = array();
 		$this->joinTable = array();
+		$this->joinJoin = false;
 		$this->fkColumnInner = array();
 		$this->fkColumn = array();
 		$this->set = array();
 		$this->typeQuery = 'select';
+		$this->allRows = array();
 		return $this;
 	}
 	private function unsetAll(){
+		unset($this->columNames);
 		unset($this->sqlText);
 		unset($this->pk);
 		unset($this->query);
@@ -92,6 +100,7 @@ class Morm {
 		unset($this->typeSelect);
 		unset($this->typeQuery);
 		unset($this->from);
+		unset($this->sqlValues);
 		unset($this->where);
 		unset($this->andWhere);
 		unset($this->orWhere);
@@ -106,6 +115,7 @@ class Morm {
 		unset($this->queryCharset);
 		unset($this->find);
 		unset($this->joinTable);
+		unset($this->joinJoin);
 		unset($this->fkColumnInner);
 		unset($this->fkColumn);
 		unset($this->set);
@@ -139,31 +149,48 @@ class Morm {
 	}
 	public function join($table){
 		$join = new stdClass();
-		$join->type='LEFT';
+		$join->type='';
 		$join->table = $table;
 		$this->joinTable[] = $join;
-		$this->getForeignKey();
+		$this->getForeignKey($table);
+		return $this;
 	}
 	public function leftJoin($table){
 		$join = new stdClass();
 		$join->type='LEFT';
 		$join->table = $table;
 		$this->joinTable[] = $join;
-		$this->getForeignKey();
+		$this->getForeignKey($table);
+		return $this;
 	}
 	public function rightJoin($table){
 		$join = new stdClass();
 		$join->type='RIGHT';
 		$join->table = $table;
 		$this->joinTable[] = $join;
-		$this->getForeignKey();
+		$this->getForeignKey($table);
+		return $this;
 	}
 	public function innerJoin($table){
 		$join = new stdClass();
-		$join->type='LEFT';
+		$join->type='INNER';
 		$join->table = $table;
 		$this->joinTable[] = $join;
-		$this->getForeignKey();
+		$this->getForeignKey($table);
+		return $this;
+	}
+	public function forceJoin($table, $method){
+		$join = new stdClass();
+		$join->type='forced';
+		$join->table = $table;
+		$join->method = $method;
+		$this->joinTable[] = $join;
+		return $this;
+	}
+	public function joinJoin(){
+		$this->joinJoin = true;
+		$this->getPrimaryKey();
+		return $this;
 	}
 	private function getPrimaryKey(){
 		$pk = $this->conexion->prepare("SHOW KEYS FROM " . $this->from . " WHERE Key_name = 'PRIMARY'");
@@ -172,14 +199,24 @@ class Morm {
 		$pk = $pk->Column_name;
 		$this->pk = $pk;
 	}
-	private function getForeignKey(){
-		$jTable = $this->joinTable[count($this->joinTable) - 1];
-		$jTable = $jTable->table;
+	private function getForeignKey($jTable){
 		$fk = $this->conexion->prepare("SELECT column_name, referenced_column_name FROM information_schema.key_column_usage WHERE referenced_table_name IS NOT NULL AND table_name = '" . $this->from . "' AND referenced_table_name = '" . $jTable . "' AND table_schema = '" . $this->dbname . "'");
 		$fk->execute(array());
 		$fk = $fk->fetch(PDO::FETCH_OBJ);
-		$this->fkColumnInner[] = $fk->Column_name;
-		$this->fkColumn[] = $fk->referenced_column_name;
+		if($fk){
+			$this->fkColumnInner[$jTable] = $fk->column_name;
+			$this->fkColumn[$jTable] = $fk->referenced_column_name;
+		}else{
+			throw new Exception('Can not get union between ' . $this->from . ' and ' . $jTable, 3);
+		}
+	}
+	private function getColumnNames($table){
+		$temp = $this->conexion->prepare("SHOW COLUMNS FROM " . $table);
+		$temp->execute(array());
+		$temp_rows = $temp->fetchAll(PDO::FETCH_OBJ);
+		$this->columNames[$table] = array();
+		foreach($temp_rows as $r)
+			$this->columNames[$table][] = $r->Field;
 	}
 	public function from($data){
 		$this->from = $data;
@@ -272,32 +309,107 @@ class Morm {
 			}
 		}
 	}
+	private function safeExecute(){
+		$this->sqlText = 'SELECT '.$this->select;
+		if(isset($this->typeSelect)) $this->sqlText .= ' ' . $this->typeSelect;
+		$this->sqlText .= ' FROM '.$this->from;
+		$this->getColumnNames($this->from);
+		if(isset($this->joinTable)){
+			foreach($this->joinTable as $key => $j){
+				$this->getColumnNames($j->table);
+				if($j->type == 'forced'){
+					$this->sqlText .= ' JOIN ' . $j->table . ' ON ' . $j->method;
+				}else{
+					$this->sqlText .= ' ' . $j->type . ' JOIN ' . $j->table . ' ON ' . $this->from . '.' . $this->fkColumnInner[$j->table] . '=' . $j->table . '.' . $this->fkColumn[$j->table];
+				}
+			}
+		}
+		$this->parseWhere();
+		if(isset($this->groupBy)) $this->sqlText .= ' GROUP BY ' . $this->groupBy;
+		if(isset($this->having)) $this->sqlText .= ' HAVING ' . $this->having;
+		if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
+		if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
+		if(isset($this->offset)) $this->sqlText .= ' OFFSET ' . $this->offset;
+		if(isset($this->procedure)) $this->sqlText .= ' PROCEDURE ' . $this->procedure;
+		if(isset($this->into)) $this->sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
+		if(isset($this->queryCharset)) $this->sqlText .= ' CHARACTER SET ' . $this->queryCharset;
+		$this->query = $this->conexion->prepare($this->sqlText);
+		$this->query->execute($this->sqlValues);
+		if($this->query){
+			while($row = $this->query->fetch(PDO::FETCH_NUM)){
+				$i=0;
+				$temp_object = new stdClass();
+				foreach ($this->columNames[$this->from] as $column){
+					$temp_object->$column = $row[$i];
+					$i++;
+				}
+				$foundRelated = false;
+				if(isset($this->joinTable)){
+					foreach($this->joinTable as $key => $j){
+						$temp_join_object = new stdClass();
+						if($j->type == 'forced'){
+							$pieces = explode("=", $j->method);
+							foreach($pieces as $p){
+								if(strpos($j->method, $j->table) !== false){
+									$related = $j->table;
+								}
+							}
+						}else{
+							$related = $this->fkColumnInner[$j->table];
+						}
+						foreach ($this->columNames[$j->table] as $column){
+							$temp_join_object->$column = $row[$i];
+							$i++;
+						}
+						if($this->joinJoin){
+							$pk = $this->pk;
+							foreach ($this->allRows as $key => &$val) {
+								if ($val->$pk === $temp_object->$pk) {
+									array_push($val->$related, $temp_join_object);
+									$foundRelated = true;
+								}
+							}
+							if(!$foundRelated){
+								$temp_object->$related = array($temp_join_object);
+							}
+						}else{
+							$temp_object->$related = $temp_join_object;
+						}
+					}
+				}
+				if(!$foundRelated)
+					$this->allRows[] = $temp_object;
+			}
+		}
+	}
 	public function execute(){
 		switch($this->typeQuery){
 			case 'select':
-				$this->sqlText = 'SELECT '.$this->select;
-				if(isset($this->typeSelect)) $this->sqlText .= ' ' . $this->typeSelect;
-				$this->sqlText .= ' FROM '.$this->from;
-				if(isset($this->joinTable)){
-					foreach($this->joinTable as $key => $j){
-						$this->sqlText .= ' ' . $j->type . ' JOIN ' . $j->table . ' ON ' . $this->from . '.' . $this->fkColumnInner[$key] . '=' . $j->table . '.' . $this->fkColumn[$key];
+				if($this->safeJoin){
+					$this->safeExecute();
+				}else{
+					$this->sqlText = 'SELECT '.$this->select;
+					if(isset($this->typeSelect)) $this->sqlText .= ' ' . $this->typeSelect;
+					$this->sqlText .= ' FROM '.$this->from;
+					if(isset($this->joinTable)){
+						foreach($this->joinTable as $key => $j){
+							$this->sqlText .= ' ' . $j->type . ' JOIN ' . $j->table . ' ON ' . $this->from . '.' . $this->fkColumnInner[$j->table] . '=' . $j->table . '.' . $this->fkColumn[$j->table];
+						}
 					}
+					$this->parseWhere();
+					if(isset($this->groupBy)) $this->sqlText .= ' GROUP BY ' . $this->groupBy;
+					if(isset($this->having)) $this->sqlText .= ' HAVING ' . $this->having;
+					if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
+					if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
+					if(isset($this->offset)) $this->sqlText .= ' OFFSET ' . $this->offset;
+					if(isset($this->procedure)) $this->sqlText .= ' PROCEDURE ' . $this->procedure;
+					if(isset($this->into)) $this->sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
+					if(isset($this->queryCharset)) $this->sqlText .= ' CHARACTER SET ' . $this->queryCharset;
+					$this->query = $this->conexion->prepare($this->sqlText);
+					$this->query->execute($this->sqlValues);
+					if($this->query)
+						$this->allRows = $this->query->fetchAll(PDO::FETCH_OBJ);
 				}
-				$this->parseWhere();
-				if(isset($this->groupBy)) $this->sqlText .= ' GROUP BY ' . $this->groupBy;
-				if(isset($this->having)) $this->sqlText .= ' HAVING ' . $this->having;
-				if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
-				if(isset($this->limit)) $this->sqlText .= ' LIMIT ' . $this->limit;
-				if(isset($this->offset)) $this->sqlText .= ' OFFSET ' . $this->offset;
-				if(isset($this->procedure)) $this->sqlText .= ' PROCEDURE ' . $this->procedure;
-				if(isset($this->into)) $this->sqlText .= ' INTO ' . $this->into . "'" . $this->filename . "'";
-				if(isset($this->queryCharset)) $this->sqlText .= ' CHARACTER SET ' . $this->queryCharset;
-				$this->query = $this->conexion->prepare($this->sqlText);
-				$this->query->execute($this->sqlValues);
-				if($this->query)
-					$this->allRows = $this->query->fetchAll(PDO::FETCH_OBJ);
-				else
-					$this->allRows = array(); // empty array for no errors
 				return $this;
 			break;
 			case 'delete':
