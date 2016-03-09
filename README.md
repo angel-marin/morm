@@ -62,9 +62,12 @@ complete EXAMPLE:
       ->getFirsts(number)                       //OPTIONAL: after execute(), return the firsts (number) rows as object
       ->getLasts(number);                       //OPTIONAL: after execute(), return the lasts (number) rows as object
     
-    NOTE:
-    You can use $morm_query->create() with optinal ->select('column_name') or you can use $morm_query->select('column_name') without create()
-    You can use parameters in where, andWhere and orWhere methods. Example:
+#### NOTE:
+
+You can use `$morm_query->create()` with optinal `->select('column_name')` or you can use `$morm_query->select('column_name')` without `create()`
+
+You can use parameters in where, andWhere and orWhere methods. Example:
+
       ->where('column = ?', 5)
       ->andWhere('column like ?', '%text%')
       ->orWhere('column > ? AND column < ?', array(5, 10))
@@ -73,6 +76,64 @@ complete EXAMPLE:
 
     $reg = $morm_query->find('id')->from('table');      // search 'id' in 'table' by primary key
     $reg = $morm_query->getTable('table')->find('id');  // search 'id' in 'table' by primary key (slower than previous method)
+
+### joinJoin() method
+
+Usually, when I do a Join between 2 tables, I need all the records from 1st table and all records from 2nd table joined to each row.
+This method prepare all for you, in a single call to the database
+    
+Usage example:
+
+        $results=$morm_query->select()
+            ->from('disk')
+            ->forceJoin('tracks', 'disk.id = tracks.disk')
+            ->joinJoin()
+            ->execute()
+            ->getAlls();
+    
+Return:
+
+        array(2){
+            object(stdClass) (4) {
+                ["id"]=>string(1) "1"
+                ["name"]=>string(16) "disk 1"
+                ["artist"]=>string(5) "artist"
+                ["tracks"]=>array(3) {
+                    [0]=>
+                    object(stdClass) (3) {
+                        ["id"]=>string(1) "1"
+                        ["name"]=>string(5) "track 1"
+                        ["disk"]=>string(1) "1"
+                    }
+                    [1]=>
+                    object(stdClass) (3) {
+                        ["id"]=>string(1) "2"
+                        ["name"]=>string(5) "track 2"
+                        ["disk"]=>string(1) "1"
+                    }
+                    [2]=>
+                    object(stdClass) (3) {
+                        ["id"]=>string(1) "3"
+                        ["name"]=>string(5) "track 3"
+                        ["disk"]=>string(1) "1"
+                    }
+                }
+            }
+            object(stdClass) (4) {
+                ["id"]=>string(1) "2"
+                ["name"]=>string(16) "disk 2"
+                ["artist"]=>string(5) "artist"
+                ["tracks"]=>array(1) {
+                    [0]=>
+                    object(stdClass) (3) {
+                        ["id"]=>string(1) "4"
+                        ["name"]=>string(5) "track 1"
+                        ["disk"]=>string(1) "2"
+                    }
+                }
+            }
+        }
+    
 
 #### Delete:
 
