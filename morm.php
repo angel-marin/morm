@@ -303,7 +303,7 @@ class Morm {
 			}
 			if(isset($this->orWhere)){
 				foreach($this->orWhere as $w){
-					$this->sqlText .= ' OR (' . $w . ')';
+					$this->sqlText .= ' OR (' . $w->sentence . ')';
 					$this->sqlValues = array_merge($this->sqlValues, $w->values);
 				}
 			}
@@ -430,8 +430,9 @@ class Morm {
 					$this->sqlText .= ' SET ';
 					foreach($this->set as $key => $j){
 						$this->sqlText .= ' ' . $j->sentence . ', ';
-						$this->sqlValues = array_merge($this->sqlValues, $w->values);
+						$this->sqlValues = array_merge($this->sqlValues, $j->values);
 					}
+					$this->sqlText = substr($this->sqlText, 0, -2) . ' ';
 				}
 				$this->parseWhere();
 				if(isset($this->orderBy)) $this->sqlText .= ' ORDER BY ' . $this->orderBy;
